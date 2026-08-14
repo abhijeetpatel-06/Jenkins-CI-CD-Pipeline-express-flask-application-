@@ -5,8 +5,8 @@ pipeline {
     environment {
         APP_DIR = "/opt/myapp"
 
-        DEPLOY_USER = "ubuntu"
-        DEPLOY_HOST = "YOUR_DEPLOY_EC2_PUBLIC_IP"
+        DEPLOY_USER = "jenkins"
+        DEPLOY_HOST = "15.252.88.81"
 
         BACKEND_PORT = "5000"
         FRONTEND_PORT = "3000"
@@ -17,7 +17,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git'
+                    url: 'https://github.com/abhijeetpatel-06/Jenkins-CI-CD-Pipeline-express-flask-application-.git'
             }
         }
 
