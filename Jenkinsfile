@@ -1,12 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        label 'linux-agent'
+    }
 
     environment {
         APP_DIR = "/opt/myapp"
-
-        DEPLOY_USER = "jenkins"
-        DEPLOY_HOST = "15.252.88.81"
-
         BACKEND_PORT = "5000"
         FRONTEND_PORT = "3000"
     }
@@ -23,35 +21,27 @@ pipeline {
         stage('Check Dependencies') {
             steps {
                 sh '''
-                    echo "Checking Python..."
+                    set -e
 
-                    if command -v python3 >/dev/null 2>&1; then
-                        echo "Python already installed"
-                        python3 --version
-                    else
-                        echo "Python not installed"
-                        exit 1
-                    fi
+                    echo "===================================="
+                    echo "Checking Dependencies"
+                    echo "===================================="
 
-                    echo "Checking Node.js..."
+                    echo "Python:"
+                    command -v python3
+                    python3 --version
 
-                    if command -v node >/dev/null 2>&1; then
-                        echo "Node.js already installed"
-                        node --version
-                    else
-                        echo "Node.js not installed"
-                        exit 1
-                    fi
+                    echo "Node.js:"
+                    command -v node
+                    node --version
 
-                    echo "Checking npm..."
+                    echo "npm:"
+                    command -v npm
+                    npm --version
 
-                    if command -v npm >/dev/null 2>&1; then
-                        echo "npm already installed"
-                        npm --version
-                    else
-                        echo "npm not installed"
-                        exit 1
-                    fi
+                    echo "Git:"
+                    command -v git
+                    git --version
                 '''
             }
         }
@@ -59,17 +49,34 @@ pipeline {
         stage('Backend Build') {
             steps {
                 sh '''
+                    set -e
+
+                    echo "===================================="
+                    echo "Backend Build"
+                    echo "===================================="
+
                     cd backend
+
+                    echo "Creating Python virtual environment..."
 
                     python3 -m venv venv
 
                     . venv/bin/activate
 
+                    echo "Upgrading pip..."
+
                     pip install --upgrade pip
 
                     if [ -f requirements.txt ]; then
+                        echo "Installing backend dependencies..."
                         pip install -r requirements.txt
+                    else
+                        echo "requirements.txt not found"
                     fi
+
+                    deactivate
+
+                    echo "Backend build completed."
                 '''
             }
         }
@@ -77,15 +84,25 @@ pipeline {
         stage('Backend Test') {
             steps {
                 sh '''
+                    set -e
+
+                    echo "===================================="
+                    echo "Backend Test"
+                    echo "===================================="
+
                     cd backend
 
                     . venv/bin/activate
 
                     if [ -f test_app.py ]; then
+                        echo "Running backend tests..."
                         python -m pytest
                     else
-                        echo "No backend test file found"
+                        echo "No test_app.py found."
+                        echo "Skipping backend tests."
                     fi
+
+                    deactivate
                 '''
             }
         }
@@ -93,15 +110,28 @@ pipeline {
         stage('Frontend Build') {
             steps {
                 sh '''
+                    set -e
+
+                    echo "===================================="
+                    echo "Frontend Build"
+                    echo "===================================="
+
                     cd frontend
 
                     if [ -f package-lock.json ]; then
+                        echo "Running npm ci..."
                         npm ci
                     else
+                        echo "package-lock.json not found."
+                        echo "Running npm install..."
                         npm install
                     fi
 
+                    echo "Running frontend build..."
+
                     npm run build --if-present
+
+                    echo "Frontend build completed."
                 '''
             }
         }
@@ -109,51 +139,40 @@ pipeline {
         stage('Frontend Test') {
             steps {
                 sh '''
+                    set -e
+
+                    echo "===================================="
+                    echo "Frontend Test"
+                    echo "===================================="
+
                     cd frontend
 
-                    npm test -- --watchAll=false || true
+                    if npm run 2>/dev/null | grep -q "test"; then
+                        echo "Test script found."
+                        npm test -- --watchAll=false
+                    else
+                        echo "No frontend test script found."
+                        echo "Skipping frontend tests."
+                    fi
                 '''
             }
         }
 
-        stage('Prepare Deployment Server') {
+        stage('Prepare Application Directory') {
             steps {
                 sh '''
-                    ssh -o StrictHostKeyChecking=no \
-                    ${DEPLOY_USER}@${DEPLOY_HOST} << 'EOF'
+                    set -e
 
-                    echo "Checking Python..."
-
-                    if command -v python3 >/dev/null 2>&1; then
-                        echo "Python already installed"
-                    else
-                        echo "Installing Python..."
-                        sudo apt update
-                        sudo apt install -y python3 python3-pip python3-venv
-                    fi
-
-                    echo "Checking Node.js..."
-
-                    if command -v node >/dev/null 2>&1; then
-                        echo "Node.js already installed"
-                    else
-                        echo "Installing Node.js..."
-                        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-                        sudo apt install -y nodejs
-                    fi
-
-                    echo "Checking npm..."
-
-                    if command -v npm >/dev/null 2>&1; then
-                        echo "npm already installed"
-                    else
-                        sudo apt install -y npm
-                    fi
+                    echo "===================================="
+                    echo "Preparing Application Directory"
+                    echo "===================================="
 
                     sudo mkdir -p ${APP_DIR}
-                    sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} ${APP_DIR}
 
-                    EOF
+                    sudo chown -R jenkins:jenkins ${APP_DIR}
+
+                    echo "Application directory:"
+                    ls -ld ${APP_DIR}
                 '''
             }
         }
@@ -161,28 +180,44 @@ pipeline {
         stage('Deploy Application') {
             steps {
                 sh '''
-                    ssh -o StrictHostKeyChecking=no \
-                    ${DEPLOY_USER}@${DEPLOY_HOST} \
-                    "rm -rf ${APP_DIR}/*"
+                    set -e
 
-                    scp -o StrictHostKeyChecking=no -r \
-                    backend frontend \
-                    ${DEPLOY_USER}@${DEPLOY_HOST}:${APP_DIR}/
+                    echo "===================================="
+                    echo "Deploying Application"
+                    echo "===================================="
+
+                    echo "Cleaning old deployment..."
+
+                    rm -rf ${APP_DIR}/backend
+                    rm -rf ${APP_DIR}/frontend
+
+                    echo "Copying backend..."
+
+                    cp -r backend ${APP_DIR}/
+
+                    echo "Copying frontend..."
+
+                    cp -r frontend ${APP_DIR}/
+
+                    echo "Deployment files copied."
+
+                    ls -la ${APP_DIR}
                 '''
             }
         }
 
-        stage('Install Application Dependencies') {
+        stage('Install Production Dependencies') {
             steps {
                 sh '''
-                    ssh -o StrictHostKeyChecking=no \
-                    ${DEPLOY_USER}@${DEPLOY_HOST} << 'EOF'
+                    set -e
 
-                    cd ${APP_DIR}
+                    echo "===================================="
+                    echo "Installing Production Dependencies"
+                    echo "===================================="
 
-                    echo "Installing backend dependencies..."
+                    cd ${APP_DIR}/backend
 
-                    cd backend
+                    echo "Creating backend virtual environment..."
 
                     if [ ! -d "venv" ]; then
                         python3 -m venv venv
@@ -198,7 +233,7 @@ pipeline {
 
                     echo "Installing frontend dependencies..."
 
-                    cd ../frontend
+                    cd ${APP_DIR}/frontend
 
                     if [ -f package-lock.json ]; then
                         npm ci
@@ -206,53 +241,84 @@ pipeline {
                         npm install
                     fi
 
-                    EOF
+                    echo "Production dependencies installed."
                 '''
             }
         }
 
-        stage('Setup Services') {
+        stage('Setup Flask Service') {
             steps {
                 sh '''
-                    ssh -o StrictHostKeyChecking=no \
-                    ${DEPLOY_USER}@${DEPLOY_HOST} << 'EOF'
+                    set -e
 
-                    echo "Creating backend service..."
+                    echo "===================================="
+                    echo "Setting up Flask Service"
+                    echo "===================================="
 
-                    sudo tee /etc/systemd/system/flask-app.service > /dev/null << SERVICE
+                    sudo tee /etc/systemd/system/flask-app.service > /dev/null <<EOF
 [Unit]
 Description=Flask Application
 After=network.target
 
 [Service]
-User=${DEPLOY_USER}
+Type=simple
+User=jenkins
 WorkingDirectory=${APP_DIR}/backend
 Environment="PATH=${APP_DIR}/backend/venv/bin"
 ExecStart=${APP_DIR}/backend/venv/bin/python app.py
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-SERVICE
+EOF
 
-                    echo "Creating frontend service..."
+                    echo "Flask service created."
+                '''
+            }
+        }
 
-                    sudo tee /etc/systemd/system/express-app.service > /dev/null << SERVICE
+        stage('Setup Frontend Service') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "===================================="
+                    echo "Setting up Frontend Service"
+                    echo "===================================="
+
+                    sudo tee /etc/systemd/system/express-app.service > /dev/null <<EOF
 [Unit]
-Description=Express Application
+Description=Express Frontend Application
 After=network.target
 
 [Service]
-User=${DEPLOY_USER}
+Type=simple
+User=jenkins
 WorkingDirectory=${APP_DIR}/frontend
-ExecStart=/usr/bin/npm start
-Restart=always
 Environment=NODE_ENV=production
 Environment=PORT=${FRONTEND_PORT}
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-SERVICE
+EOF
+
+                    echo "Express service created."
+                '''
+            }
+        }
+
+        stage('Start Services') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "===================================="
+                    echo "Starting Services"
+                    echo "===================================="
 
                     sudo systemctl daemon-reload
 
@@ -262,7 +328,13 @@ SERVICE
                     sudo systemctl restart flask-app
                     sudo systemctl restart express-app
 
-                    EOF
+                    sleep 5
+
+                    echo "Flask status:"
+                    sudo systemctl --no-pager status flask-app || true
+
+                    echo "Express status:"
+                    sudo systemctl --no-pager status express-app || true
                 '''
             }
         }
@@ -270,23 +342,29 @@ SERVICE
         stage('Health Check') {
             steps {
                 sh '''
-                    ssh -o StrictHostKeyChecking=no \
-                    ${DEPLOY_USER}@${DEPLOY_HOST} << 'EOF'
+                    echo "===================================="
+                    echo "Health Check"
+                    echo "===================================="
 
-                    sleep 5
-
-                    echo "Flask status:"
+                    echo ""
+                    echo "Flask Service:"
                     sudo systemctl is-active flask-app
 
-                    echo "Express status:"
+                    echo ""
+                    echo "Express Service:"
                     sudo systemctl is-active express-app
 
-                    echo "Checking ports:"
+                    echo ""
+                    echo "Listening Ports:"
+                    sudo ss -tulnp | grep ":${BACKEND_PORT}" || true
+                    sudo ss -tulnp | grep ":${FRONTEND_PORT}" || true
 
-                    sudo ss -tulnp | grep :${BACKEND_PORT} || true
-                    sudo ss -tulnp | grep :${FRONTEND_PORT} || true
+                    echo ""
+                    echo "Application Directory:"
+                    ls -la ${APP_DIR}
 
-                    EOF
+                    echo ""
+                    echo "Health check completed."
                 '''
             }
         }
@@ -294,11 +372,23 @@ SERVICE
 
     post {
         success {
-            echo "Deployment completed successfully."
+            echo "===================================="
+            echo "DEPLOYMENT SUCCESSFUL"
+            echo "===================================="
+            echo "Application deployed on linux-agent."
+            echo "Backend Port: 5000"
+            echo "Frontend Port: 3000"
         }
 
         failure {
-            echo "Deployment failed."
+            echo "===================================="
+            echo "DEPLOYMENT FAILED"
+            echo "===================================="
+            echo "Check the stage above for the error."
+        }
+
+        always {
+            echo "Pipeline execution completed."
         }
     }
 }
