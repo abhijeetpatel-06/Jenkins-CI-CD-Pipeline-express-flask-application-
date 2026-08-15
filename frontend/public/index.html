@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Flask + Express App</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --purple: #8b5cf6;
+    --pink: #ec4899;
+    --blue: #3b82f6;
+    --teal: #14b8a6;
+    --yellow: #fbbf24;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    color: #fff;
+    background: linear-gradient(-45deg, #8b5cf6, #ec4899, #3b82f6, #14b8a6);
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
+    overflow-x: hidden;
+  }
+
+  @keyframes gradientShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* floating decorative blobs */
+  .blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.35;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .blob.one   { width: 300px; height: 300px; background: var(--yellow); top: -80px; left: -80px; animation: floatSlow 12s ease-in-out infinite; }
+  .blob.two   { width: 260px; height: 260px; background: var(--teal);   bottom: -60px; right: -60px; animation: floatSlow 14s ease-in-out infinite reverse; }
+  .blob.three { width: 200px; height: 200px; background: var(--pink);   top: 40%; right: -80px; animation: floatSlow 10s ease-in-out infinite; }
+
+  @keyframes floatSlow {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50%      { transform: translate(20px, -30px) scale(1.08); }
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 620px;
+    margin: 0 auto;
+    padding: 48px 18px 64px;
+  }
+
+  header { text-align: center; margin-bottom: 32px; }
+  header h1 {
+    font-size: 2rem;
+    margin: 0 0 6px;
+    text-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  }
+  header p {
+    margin: 0;
+    opacity: 0.9;
+    font-size: 0.95rem;
+  }
+  .badges { display:flex; gap:8px; justify-content:center; margin-top:14px; flex-wrap: wrap; }
+  .badge {
+    background: rgba(255,255,255,0.18);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .card {
+    background: rgba(255,255,255,0.14);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 20px;
+    padding: 26px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+    margin-bottom: 26px;
+    transition: transform 0.25s ease;
+  }
+  .card:hover { transform: translateY(-3px); }
+
+  form { display: flex; flex-direction: column; gap: 14px; }
+
+  label { font-size: 0.8rem; font-weight: 600; opacity: 0.9; margin-bottom: -8px; }
+
+  input, textarea {
+    background: rgba(15, 23, 42, 0.35);
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #fff;
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  }
+  input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.6); }
+  input:focus, textarea:focus {
+    border-color: #fff;
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.15);
+    transform: translateY(-1px);
+  }
+
+  button {
+    background: linear-gradient(135deg, var(--pink), var(--purple));
+    color: white;
+    border: none;
+    padding: 13px 18px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    box-shadow: 0 8px 20px rgba(236, 72, 153, 0.4);
+    transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  }
+  button:hover { transform: translateY(-2px) scale(1.02); filter: brightness(1.08); }
+  button:active { transform: translateY(0) scale(0.98); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  #status {
+    min-height: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: center;
+  }
+  #status.ok  { color: #a7f3d0; }
+  #status.err { color: #fecaca; }
+
+  .section-title {
+    font-size: 1.1rem;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 0 4px rgba(20,184,166,0.3);
+    animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(20,184,166,0.5); }
+    70%  { box-shadow: 0 0 0 10px rgba(20,184,166,0); }
+    100% { box-shadow: 0 0 0 0 rgba(20,184,166,0); }
+  }
+
+  .item {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 14px 16px;
+    border-radius: 14px;
+    margin-bottom: 10px;
+    animation: slideIn 0.4s ease;
+    transition: transform 0.15s ease, background 0.2s ease;
+  }
+  .item:hover { transform: translateX(4px); background: rgba(255,255,255,0.18); }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .item .row { display:flex; justify-content: space-between; align-items:center; }
+  .item .name { font-weight: 700; }
+  .item .msg { margin-top: 4px; opacity: 0.95; }
+  .item .meta { color: rgba(255,255,255,0.65); font-size: 0.72rem; margin-top: 6px; }
+
+  .empty { opacity: 0.75; font-size: 0.9rem; text-align:center; padding: 10px 0; }
+
+  footer {
+    text-align: center;
+    font-size: 0.75rem;
+    opacity: 0.75;
+    margin-top: 10px;
+  }
+
+  /* tiny confetti burst on save */
+  .confetti {
+    position: fixed;
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    top: 50%; left: 50%;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0;
+  }
+</style>
+</head>
+<body>
+  <div class="blob one"></div>
+  <div class="blob two"></div>
+  <div class="blob three"></div>
+
+  <div class="wrap">
+    <header>
+      <h1>🚀 Flask + Express App</h1>
+      <p>Frontend (Express, :3000) → Backend (Flask, :5000) → saved instantly</p>
+      <div class="badges">
+        <span class="badge">⚙️ PM2</span>
+        <span class="badge">🐍 Flask API</span>
+        <span class="badge">🟩 Express UI</span>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="section-title"><span class="dot"></span> Add a new entry</div>
+      <form id="item-form">
+        <label for="name">Name</label>
+        <input type="text" id="name" placeholder="e.g. Priya" required />
+        <label for="message">Message</label>
+        <textarea id="message" rows="3" placeholder="Type something..." required></textarea>
+        <button type="submit" id="submit-btn">✨ Save to Backend</button>
+        <div id="status"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="section-title">📋 Saved items (live from backend)</div>
+      <div id="items-list"><p class="empty">Loading...</p></div>
+    </div>
+
+    <footer>Data is stored in the Flask backend's SQLite database.</footer>
+  </div>
+
+  <script>
+    const API_BASE_URL = "__API_BASE_URL__";
+
+    const form = document.getElementById("item-form");
+    const statusEl = document.getElementById("status");
+    const listEl = document.getElementById("items-list");
+    const submitBtn = document.getElementById("submit-btn");
+
+    function apiUrl(path) {
+      return API_BASE_URL ? API_BASE_URL + path : path;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    async function loadItems() {
+      try {
+        const res = await fetch(apiUrl("/api/items"));
+        if (!res.ok) throw new Error("Failed to load");
+        const items = await res.json();
+        if (items.length === 0) {
+          listEl.innerHTML = '<p class="empty">No items saved yet — add one above 👆</p>';
+          return;
+        }
+        listEl.innerHTML = items
+          .map(
+            (it) => `
+            <div class="item">
+              <div class="row">
+                <span class="name">👤 ${escapeHtml(it.name)}</span>
+                <span class="meta">#${it.id}</span>
+              </div>
+              <div class="msg">${escapeHtml(it.message)}</div>
+              <div class="meta">🕒 ${escapeHtml(it.created_at || "")}</div>
+            </div>`
+          )
+          .join("");
+      } catch (e) {
+        listEl.innerHTML = '<p class="empty">⚠️ Could not reach backend API at ' + API_BASE_URL + '</p>';
+      }
+    }
+
+    function burstConfetti() {
+      const colors = ["#8b5cf6", "#ec4899", "#3b82f6", "#14b8a6", "#fbbf24"];
+      for (let i = 0; i < 18; i++) {
+        const c = document.createElement("div");
+        c.className = "confetti";
+        c.style.background = colors[i % colors.length];
+        document.body.appendChild(c);
+        const angle = (Math.PI * 2 * i) / 18;
+        const dist = 80 + Math.random() * 60;
+        const dx = Math.cos(angle) * dist;
+        const dy = Math.sin(angle) * dist;
+        c.animate(
+          [
+            { transform: "translate(0,0) scale(1)", opacity: 1 },
+            { transform: `translate(${dx}px, ${dy}px) scale(0)`, opacity: 0 },
+          ],
+          { duration: 700 + Math.random() * 300, easing: "ease-out" }
+        );
+        setTimeout(() => c.remove(), 1100);
+      }
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      statusEl.textContent = "Saving...";
+      statusEl.className = "";
+      submitBtn.disabled = true;
+
+      const name = document.getElementById("name").value;
+      const message = document.getElementById("message").value;
+
+      try {
+        const res = await fetch(apiUrl("/api/items"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, message }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Save failed");
+
+        statusEl.textContent = "✅ Saved to backend!";
+        statusEl.className = "ok";
+        burstConfetti();
+        form.reset();
+        loadItems();
+      } catch (err) {
+        statusEl.textContent = "❌ " + err.message;
+        statusEl.className = "err";
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    loadItems();
+    setInterval(loadItems, 8000);
+  </script>
+</body>
+</html>

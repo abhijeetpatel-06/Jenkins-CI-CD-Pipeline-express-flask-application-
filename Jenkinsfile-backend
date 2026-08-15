@@ -1,0 +1,54 @@
+// Jenkins Pipeline for the Flask backend.
+//
+// *** CHANGE THIS BEFORE USE ***
+// Replace the URL below with your own Flask backend Git repository URL.
+// (See README.md -> "Jenkins Setup" for full step-by-step instructions.)
+
+pipeline {
+    agent any
+
+    environment {
+        // Folder where the app is checked out & run from on the Jenkins/EC2 machine.
+        // Change this path if your server uses a different location.
+        APP_DIR = "${WORKSPACE}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Pulling latest code from Git...'
+                git branch: 'main', url: 'https://github.com/<your-username>/<flask-backend-repo>.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                echo 'Installing Python dependencies...'
+                sh '''
+                    cd "${APP_DIR}"
+                    pip3 install -r requirements.txt
+                '''
+            }
+        }
+
+        stage('Restart Application') {
+            steps {
+                echo 'Restarting flask-backend with PM2...'
+                sh '''
+                    cd "${APP_DIR}"
+                    pm2 restart flask-backend || pm2 start ecosystem.config.js --only flask-backend
+                    pm2 save
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Flask backend deployed successfully!'
+        }
+        failure {
+            echo '❌ Flask backend deployment failed. Check the console output above.'
+        }
+    }
+}

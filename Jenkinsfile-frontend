@@ -1,0 +1,52 @@
+// Jenkins Pipeline for the Express frontend.
+//
+// *** CHANGE THIS BEFORE USE ***
+// Replace the URL below with your own Express frontend Git repository URL.
+// (See README.md -> "Jenkins Setup" for full step-by-step instructions.)
+
+pipeline {
+    agent any
+
+    environment {
+        APP_DIR = "${WORKSPACE}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Pulling latest code from Git...'
+                git branch: 'main', url: 'https://github.com/<your-username>/<express-frontend-repo>.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                echo 'Installing Node dependencies...'
+                sh '''
+                    cd "${APP_DIR}"
+                    npm install
+                '''
+            }
+        }
+
+        stage('Restart Application') {
+            steps {
+                echo 'Restarting express-frontend with PM2...'
+                sh '''
+                    cd "${APP_DIR}"
+                    pm2 restart express-frontend || pm2 start ecosystem.config.js --only express-frontend
+                    pm2 save
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Express frontend deployed successfully!'
+        }
+        failure {
+            echo '❌ Express frontend deployment failed. Check the console output above.'
+        }
+    }
+}

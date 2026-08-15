@@ -1,13 +1,12 @@
 {
-  "name": "flaskp-frontend",
+  "name": "express-frontend",
   "version": "1.0.0",
-  "description": "Express frontend that sends a form submission to the Flask backend",
+  "description": "Express frontend for Flask + Express PM2/Jenkins/EC2 demo",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "ejs": "^3.1.10"
+    "express": "^4.19.2"
   }
 }

@@ -1,26 +1,31 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// This is the URL the BROWSER will call directly (client-side fetch),
-// so it must be an address reachable from the user's machine, not the
-// internal docker-network service name. Default matches the port
-// docker-compose publishes for the backend on localhost.
-const BACKEND_PUBLIC_URL = process.env.BACKEND_PUBLIC_URL || "http://localhost:5000";
+// *** THIS IS THE ONLY THING YOU NEED TO CHANGE FOR EC2 vs LOCAL ***
+// Local machine:  http://localhost:5000
+// EC2 deployment: http://<YOUR_EC2_PUBLIC_IP>:5000
+// Set it in ecosystem.config.js (see README) or as an environment variable
+// before starting the app.
+const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:5000";
 
-app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, "views"));
-app.use(express.static(path.join(__dirname, "public")));
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 app.get("/", (req, res) => {
-  res.render("index", { backendUrl: BACKEND_PUBLIC_URL });
+  const filePath = path.join(__dirname, "public", "index.html");
+  fs.readFile(filePath, "utf8", (err, html) => {
+    if (err) return res.status(500).send("Error loading page");
+    const rendered = html.replace("__API_BASE_URL__", API_BASE_URL);
+    res.send(rendered);
+  });
 });
 
-app.listen(PORT, () => {
-  console.log(`Frontend running at http://localhost:${PORT}`);
-  console.log(`Form will submit to backend at ${BACKEND_PUBLIC_URL}/submit`);
+app.use(express.static(path.join(__dirname, "public")));
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Frontend listening on port ${PORT}`);
+  console.log(`API_BASE_URL = "${API_BASE_URL}"`);
 });
