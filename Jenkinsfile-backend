@@ -1,43 +1,58 @@
-// Jenkins Pipeline for the Flask backend.
-//
-// *** CHANGE THIS BEFORE USE ***
-// Replace the URL below with your own Flask backend Git repository URL.
-// (See README.md -> "Jenkins Setup" for full step-by-step instructions.)
-
 pipeline {
     agent any
 
     environment {
-        // Folder where the app is checked out & run from on the Jenkins/EC2 machine.
-        // Change this path if your server uses a different location.
-        APP_DIR = "${WORKSPACE}"
+        BACKEND_DIR = "${WORKSPACE}/backend"
+        VENV_DIR = "${WORKSPACE}/backend/venv"
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                echo 'Pulling latest code from Git...'
-                git branch: 'main', url: 'https://github.com/abhijeetpatel-06/Jenkins-CI-CD-Pipeline-express-flask-application-.git'
-            }
-        }
 
         stage('Install Dependencies') {
             steps {
-                echo 'Installing Python dependencies...'
+                echo 'Creating Python virtual environment...'
+
                 sh '''
-                    cd "${APP_DIR}"
-                    pip3 install -r requirements.txt
+                    cd "${BACKEND_DIR}"
+
+                    echo "Python version:"
+                    python3 --version
+
+                    echo "Creating virtual environment..."
+                    python3 -m venv "${VENV_DIR}"
+
+                    echo "Upgrading pip..."
+                    "${VENV_DIR}/bin/pip" install --upgrade pip
+
+                    echo "Installing Flask dependencies..."
+                    "${VENV_DIR}/bin/pip" install -r requirements.txt
+
+                    echo "Dependencies installed successfully."
                 '''
             }
         }
 
         stage('Restart Application') {
             steps {
-                echo 'Restarting flask-backend with PM2...'
+                echo 'Restarting Flask backend with PM2...'
+
                 sh '''
-                    cd "${APP_DIR}"
-                    pm2 restart flask-backend || pm2 start ecosystem.config.js --only flask-backend
+                    cd "${BACKEND_DIR}"
+
+                    echo "Checking PM2..."
+                    pm2 --version
+
+                    echo "Restarting Flask backend..."
+
+                    pm2 restart flask-backend || \
+                    pm2 start app.py \
+                        --name flask-backend \
+                        --interpreter "${VENV_DIR}/bin/python"
+
                     pm2 save
+
+                    echo "Current PM2 processes:"
+                    pm2 list
                 '''
             }
         }
@@ -47,6 +62,7 @@ pipeline {
         success {
             echo '✅ Flask backend deployed successfully!'
         }
+
         failure {
             echo '❌ Flask backend deployment failed. Check the console output above.'
         }

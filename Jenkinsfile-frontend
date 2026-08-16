@@ -1,41 +1,82 @@
-// Jenkins Pipeline for the Express frontend.
-//
-// *** CHANGE THIS BEFORE USE ***
-// Replace the URL below with your own Express frontend Git repository URL.
-// (See README.md -> "Jenkins Setup" for full step-by-step instructions.)
-
 pipeline {
     agent any
 
     environment {
-        APP_DIR = "${WORKSPACE}"
+        APP_DIR = "${WORKSPACE}/frontend"
+        GIT_REPO = "https://github.com/abhijeetpatel-06/Jenkins-CI-CD-Pipeline-express-flask-application-.git"
+        GIT_BRANCH = "main"
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                echo 'Pulling latest code from Git...'
-                git branch: 'main', url: 'https://github.com/abhijeetpatel-06/Jenkins-CI-CD-Pipeline-express-flask-application-.git'
+                echo 'Checking out frontend repository...'
+
+                git branch: "${GIT_BRANCH}",
+                    url: "${GIT_REPO}"
+
+                echo 'Repository checked out successfully.'
+
+                sh '''
+                    echo "Workspace:"
+                    pwd
+
+                    echo "Files in workspace:"
+                    ls -la
+
+                    echo "Frontend files:"
+                    ls -la frontend
+
+                    echo "Checking package.json:"
+                    test -f frontend/package.json
+
+                    echo "package.json found successfully."
+                '''
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                echo 'Installing Node dependencies...'
+                echo 'Installing Express frontend dependencies...'
+
                 sh '''
                     cd "${APP_DIR}"
+
+                    echo "Node version:"
+                    node --version
+
+                    echo "NPM version:"
+                    npm --version
+
+                    echo "Installing dependencies..."
+
                     npm install
+
+                    echo "Dependencies installed successfully."
                 '''
             }
         }
 
         stage('Restart Application') {
             steps {
-                echo 'Restarting express-frontend with PM2...'
+                echo 'Restarting Express frontend with PM2...'
+
                 sh '''
                     cd "${APP_DIR}"
-                    pm2 restart express-frontend || pm2 start ecosystem.config.js --only express-frontend
+
+                    echo "Checking PM2..."
+                    pm2 --version
+
+                    echo "Restarting Express frontend..."
+
+                    pm2 restart express-frontend || \
+                    pm2 start server.js --name express-frontend
+
                     pm2 save
+
+                    echo "Current PM2 processes:"
+                    pm2 list
                 '''
             }
         }
@@ -45,8 +86,9 @@ pipeline {
         success {
             echo '✅ Express frontend deployed successfully!'
         }
+
         failure {
-            echo '❌ Express frontend deployment failed. Check the console output above.'
+            echo '❌ Express frontend deployment failed!'
         }
     }
 }
